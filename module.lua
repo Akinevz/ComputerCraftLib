@@ -1,8 +1,8 @@
 local module = {}
 
 module.id = "KineCraft Library"
-module.version = "0.1"
-module.cache = "incoming.http"
+module.version = "0.2"
+module.cache = "module.lua"
 module.repo = "github:akinevz/ComputerCraftLib"
 
 function module:install_version(file)
@@ -22,7 +22,9 @@ function module:install_version(file)
     end
 
     -- Move file into folder
-    fs.move(file, folder .. "/" .. file)
+    local dest = folder .. "/" .. file
+    fs.move(file, dest)
+    return dest
 end
 
 function module:get_version(file)
@@ -68,7 +70,7 @@ end
 function module:fetch_github(repoString)
     -- Split repo string into protocol, user and repo
     local user, repo = repoString:match("(.-)/(.+)$")
-    local url = "https://raw.githubusercontent.com/" .. user .. "/" .. repo .. "/master/init.lua"
+    local url = "https://raw.githubusercontent.com/" .. user .. "/" .. repo .. "/master/module.lua"
     self:fetch(url, self.cache)
 end
 
@@ -83,10 +85,28 @@ function module:fetch(url, filename)
     f.close()
 end
 
-function module:autoupdate()
-end
-
 function module:bootstrap()
+    -- Check if file is being run directly
+    if arg[0] == "=stdin" then
+        -- Run autoupdate()
+        self:autoupdate()
+    end
+    
+    return self
 end
 
-return module
+function module:autoupdate()
+    -- Get repo URL from module object
+    local repo = self.repo
+
+    -- fetch latest module.lua from the repo
+    self:fetchrepo(repo)
+
+    -- install latest version
+    local installed = self:install_version(module.cache)
+
+    -- create soft link to the installed file
+    fs.link(installed, "startup")
+end
+
+return module:bootstrap()
