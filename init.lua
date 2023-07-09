@@ -1,14 +1,39 @@
 local module = {}
 
 module.id = "KineCraft Library"
-module.package = "module"
-module.file = "init.lua"
-module.provides = "module/init"
-module.version = "1.0.3"
+module.version = "1.0.4"
 module.repo = "github:akinevz/ComputerCraftLib"
+module.file = "init.lua"
+module.package = "main"
 
-function module:provided()
-    return self.provides .. ".lua"
+function module:fetchrepo(repoString)
+    -- Split repo string into protocol and rest of string
+    local protocol, repo = repoString:match("^(.-):(.-)$")
+
+    -- Call correct function based on protocol
+    local url
+    if protocol == "pastebin" then
+        url = self:fetch_pastebin(repo)
+    elseif protocol == "github" then
+        url = self:fetch_github(repo)
+    else
+        error("Invalid protocol in repo string")
+    end
+
+    return self:fetch(url, self.file)
+end
+
+function module:fetch_pastebin(pasteID)
+    local url = "https://pastebin.com/raw/" .. pasteID
+    return url
+end
+
+function module:fetch_github(repoString)
+    -- Split repo string into protocol, user and repo
+    local user, repo = repoString:match("(.-)/(.+)$")
+    local file = self.file
+    local url = "https://raw.githubusercontent.com/" .. user .. "/" .. repo .. "/master/" .. file
+    return url
 end
 
 function module:fetch(url, filename)
@@ -29,36 +54,9 @@ function module:fetch(url, filename)
     return dest
 end
 
-function module:fetchrepo(repoString)
-    -- Split repo string into protocol and rest of string
-    local protocol, repo = repoString:match("^(.-):(.-)$")
-
-    -- Call correct function based on protocol
-    if protocol == "pastebin" then
-        return self:fetch_pastebin(repo)
-    elseif protocol == "github" then
-        return self:fetch_github(repo)
-    else
-        error("Invalid protocol in repo string")
-    end
-end
-
-function module:fetch_pastebin(pasteID)
-    local url = "https://pastebin.com/raw/" .. pasteID
-    return self:fetch(url, self.file)
-end
-
-function module:fetch_github(repoString)
-    -- Split repo string into protocol, user and repo
-    local user, repo = repoString:match("(.-)/(.+)$")
-    local file = self.file
-    local url = "https://raw.githubusercontent.com/" .. user .. "/" .. repo .. "/master/" .. file
-    return self:fetch(url, file)
-end
-
 function module:install_version(dest)
     -- Get module version from file contents
-    local version = self:get_version(self.provides)
+    local version = self:get_version(dest:gsub(".lua", ""))
 
     -- Construct folder path
     local repoString = self.repo:gsub(":", "-")
@@ -71,10 +69,8 @@ function module:install_version(dest)
     end
 
     -- Move file into folder
-    if not fs.exists(dest) then
-        fs.move(self.cache, dest, true)
-    end
-    return dest
+    fs.move(dest, folder .. "/" .. filename)
+    return folder .. "/" .. filename
 end
 
 function module:get_version(file)
@@ -101,11 +97,6 @@ end
 function module:autoupdate()
     print("performing autoupdate")
 
-    local provided = self:provided()
-    if fs.exists(provided) then
-        fs.delete(provided)
-    end
-
     -- Get repo URL from module object
     local repo = self.repo
 
@@ -125,13 +116,10 @@ function module:autoupdate()
 end
 
 function module:bootstrap()
-    if pcall(debug.getlocal, 4, 1) then
-        print("in package")
+    if shell.getRunningProgram() == self:provided() then
         return self
     else
-        print("in main script")
-        self:autoupdate()
-        return self
+        return self:autoupdate()
     end
 end
 
