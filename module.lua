@@ -2,7 +2,7 @@ local module = {}
 
 module.id = "KineCraft Library"
 module.file = "init"
-module.version = "1.0"
+module.version = "1.1"
 module.cache = module.file .. ".lua"
 module.repo = "github:akinevz/ComputerCraftLib"
 
@@ -100,6 +100,10 @@ end
 function module:autoupdate()
     -- Get repo URL from module object
     local repo = self.repo
+
+    if fs.exists(self.file) then
+        fs.delete(self.file)
+    end
 
     -- fetch latest module.lua from the repo
     self:fetchrepo(repo)
