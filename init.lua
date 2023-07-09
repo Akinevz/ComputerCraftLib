@@ -4,7 +4,7 @@ module.id = "KineCraft Library"
 module.package = "module"
 module.file = "init.lua"
 module.provides = "module/init"
-module.version = "1.0.2"
+module.version = "1.0.3"
 module.repo = "github:akinevz/ComputerCraftLib"
 
 function module:provided()
@@ -125,9 +125,14 @@ function module:autoupdate()
 end
 
 function module:bootstrap()
-    self:autoupdate()
-
-    return self
+    if pcall(debug.getlocal, 4, 1) then
+        print("in package")
+        return self
+    else
+        print("in main script")
+        self:autoupdate()
+        return self
+    end
 end
 
 return module:bootstrap()
