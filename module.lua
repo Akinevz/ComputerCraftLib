@@ -1,16 +1,15 @@
 local module = {}
 
 module.id = "KineCraft Library"
-module.version = "0.2"
-module.cache = "module.lua"
+module.file = "init"
+module.version = "1.0"
+module.cache = module.file .. ".lua"
 module.repo = "github:akinevz/ComputerCraftLib"
 
-function module:install_version(file)
+
+function module:install_version()
     -- Get module version from file contents
-    local f = fs.open(file, "r")
-    local contents = f.readAll()
-    f.close()
-    local version = self:get_version(contents)
+    local version = self:get_version(self.file)
 
     -- Construct folder path
     local folder = self.repo .. "_" .. version
@@ -22,8 +21,10 @@ function module:install_version(file)
     end
 
     -- Move file into folder
-    local dest = folder .. "/" .. file
-    fs.move(file, dest)
+    local dest = folder .. "/" .. self.cache
+    if not fs.exists(dest) then
+        fs.move(self.cache, dest, true)
+    end
     return dest
 end
 
@@ -87,11 +88,12 @@ end
 
 function module:bootstrap()
     -- Check if file is being run directly
-    if arg[0] == "=stdin" then
+    if _G == _G then
         -- Run autoupdate()
+        print("performing autoupdate")
         self:autoupdate()
     end
-    
+
     return self
 end
 
@@ -103,10 +105,15 @@ function module:autoupdate()
     self:fetchrepo(repo)
 
     -- install latest version
-    local installed = self:install_version(module.cache)
+    local installed = self:install_version()
 
     -- create soft link to the installed file
-    fs.link(installed, "startup")
+    local startup = "startup/01_os.lua"
+    if fs.exists(startup) then
+        fs.delete(startup)
+    end
+
+    fs.copy(installed, startup)
 end
 
 return module:bootstrap()
