@@ -4,7 +4,7 @@ module.id = "KineCraft Library"
 module.package = "module"
 module.file = "init.lua"
 module.provides = "module/init"
-module.version = "1.0.1"
+module.version = "1.0.2"
 module.repo = "github:akinevz/ComputerCraftLib"
 
 function module:provided()
@@ -98,24 +98,16 @@ function module:get_version(file)
     return version
 end
 
-function module:bootstrap()
-    -- Check if file is being run directly
-    if _G == _G then
-        -- Run autoupdate()
-        print("performing autoupdate")
-        self:autoupdate()
+function module:autoupdate()
+    print("performing autoupdate")
+
+    local provided = self:provided()
+    if fs.exists(provided) then
+        fs.delete(provided)
     end
 
-    return self
-end
-
-function module:autoupdate()
     -- Get repo URL from module object
     local repo = self.repo
-
-    if fs.exists(self.file) then
-        fs.delete(self.file)
-    end
 
     -- fetch latest module.lua from the repo
     local dest = self:fetchrepo(repo)
@@ -124,12 +116,18 @@ function module:autoupdate()
     local installed = self:install_version(dest)
 
     -- create soft link to the installed file
-    local startup = "startup/01_os.lua"
+    local startup = "startup/31_startup.lua"
     if fs.exists(startup) then
         fs.delete(startup)
     end
 
     fs.copy(installed, startup)
+end
+
+function module:bootstrap()
+    self:autoupdate()
+
+    return self
 end
 
 return module:bootstrap()
