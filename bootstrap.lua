@@ -10,10 +10,10 @@ local function dependency(path)
     return fs.exists(path)
 end
 
-if arg[1] == "clean" then
-    fs.delete("/mbs.lua")
-    fs.delete("/update.lua")
-    return
+local function clean(path)
+    if fs.exists(path) then
+        fs.delete(path)
+    end
 end
 
 if not arg[1] then
@@ -37,4 +37,11 @@ if not arg[1] then
     if userinput == "Y" then
         os.reboot()
     end
+elseif arg[1] == "clean" then
+    clean("/update.lua")
+    clean("/mbs.lua")
+    clean("/startup")
+    clean("/packages")
+else
+    error("Invalid argument")
 end
