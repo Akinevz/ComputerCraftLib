@@ -102,6 +102,7 @@ end
 
 function libpkg:bootstrap()
     local repo = self.root_repo
+
     self:download(repo)
     self:postinstall(repo)
 end
@@ -198,5 +199,7 @@ elseif arg[1] == "install" then
     end
 elseif arg[1] == "clean" then
     libpkg:clean()
+    print("clean")
 end
-print("checking for updates")
+
+print(arg)
