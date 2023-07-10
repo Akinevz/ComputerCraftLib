@@ -57,7 +57,13 @@ function libfetch:file(repo, file)
     end
 end
 
-function libfetch:dependencies(dir)
+local libpkg = {}
+
+libpkg.package_dir = "/packages"
+libpkg.startup_dir = "/startup"
+libpkg.root_repo = "github:akinevz/ComputerCraftLib"
+
+function libpkg:dependencies(dir)
     local module_path = dir .. "/module.lua"
     local f = fs.open(module_path, "r")
     local content = f.readAll()
@@ -76,12 +82,6 @@ function libfetch:dependencies(dir)
 
     return dependencies
 end
-
-local libpkg = {}
-
-libpkg.package_dir = "/packages"
-libpkg.startup_dir = "/startup"
-libpkg.root_repo = "github:akinevz/ComputerCraftLib"
 
 function libpkg:cleanup()
     local source = "/update.lua"
@@ -117,7 +117,7 @@ function libpkg:download(repo)
     local module = libfetch:file(repo, "module.lua")
     local package = self:make_pkg(repo)
     libfetch:save(module, package, "module.lua")
-    local dependencies = libfetch:dependencies(package)
+    local dependencies = self:dependencies(package)
     for _, depname in ipairs(dependencies) do
         local dep = libfetch:file(repo, depname)
         libfetch:save(dep, package, depname)
@@ -198,7 +198,7 @@ function libpkg:startup()
     local ownPath = shell.getRunningProgram()
     if ownPath == "/startup/update.lua" then
         self:cleanup()
-    else 
+    else
         self:bootstrap()
     end
 end
