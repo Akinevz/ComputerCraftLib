@@ -95,7 +95,9 @@ function libpkg:make_pkg(module)
 end
 
 function libpkg:bootstrap()
-    self:download("github:akinevz/ComputerCraftLib")
+    local repo = "github:akinevz/ComputerCraftLib"
+    self:download(repo)
+    self:postinstall(repo)
 end
 
 function libpkg:download(repo)
@@ -170,6 +172,9 @@ function libpkg:postinstall(repo)
             -- Copy entry file to startup dir
             local src = package .. "/" .. entry
             local dest = self.startup_dir .. "/" .. entry
+            if fs.exists(dest) then
+                fs.delete(dest)
+            end
             fs.copy(src, dest)
             break
         end
@@ -186,3 +191,4 @@ elseif arg[1] == "install" then
         libpkg:install("module.lua")
     end
 end
+print("checking for updates")
