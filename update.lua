@@ -83,6 +83,15 @@ libpkg.package_dir = "/packages"
 libpkg.startup_dir = "/startup"
 libpkg.root_repo = "github:akinevz/ComputerCraftLib"
 
+function libpkg:delete_installer()
+    local source = "/update.lua"
+    local dest = "/startup/update.lua"
+    if fs.exists(source) then
+        fs.delete(dest)
+        fs.move(source, dest)
+    end
+end
+
 function libpkg:clean()
     fs.delete(self.package_dir)
     fs.delete(self.startup_dir)
@@ -188,6 +197,15 @@ function libpkg:postinstall(repo)
     end
 end
 
+function libpkg:startup()
+    local ownPath = shell.getCurrentProgram()
+    if ownPath == "/startup/update.lua" then
+        self:delete_installer()
+    else 
+        self:bootstrap()
+    end
+end
+
 if arg[1] == "bootstrap" then
     libpkg:bootstrap()
 elseif arg[1] == "install" then
@@ -200,6 +218,7 @@ elseif arg[1] == "install" then
 elseif arg[1] == "clean" then
     libpkg:clean()
     print("clean")
+elseif not arg[1] then
+    libpkg:startup()
+    print("autoupdating")
 end
-
-print(arg)

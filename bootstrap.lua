@@ -10,23 +10,31 @@ local function dependency(path)
     return fs.exists(path)
 end
 
-if not dependency("/mbs.lua") then
-    -- Install mbs dependency (provider of /startup)
-    local mbs = "https://raw.githubusercontent.com/SquidDev-CC/mbs/master/mbs.lua"
-    wget("/mbs.lua", mbs, "/mbs.lua install")
+if arg[1] == "clean" then
+    fs.delete("/mbs.lua")
+    fs.delete("/update.lua")
+    return
 end
 
-if not dependency("/update.lua") then
-    local bootstrap = "https://raw.githubusercontent.com/akinevz/ComputerCraftLib/master/update.lua"
-    wget("/update.lua", bootstrap, "/update.lua bootstrap")
-end
+if not arg[1] then
+    if not dependency("/mbs.lua") then
+        -- Install mbs dependency (provider of /startup)
+        local mbs = "https://raw.githubusercontent.com/SquidDev-CC/mbs/master/mbs.lua"
+        wget("/mbs.lua", mbs, "/mbs.lua install")
+    end
 
--- cleanup script
-fs.delete(shell.getRunningProgram())
+    if not dependency("/update.lua") then
+        local bootstrap = "https://raw.githubusercontent.com/akinevz/ComputerCraftLib/master/update.lua"
+        wget("/update.lua", bootstrap, "/update.lua bootstrap")
+    end
 
-print("Press Y to update and reboot (any key to cancel)")
-local event, userinput = os.pullEvent("char")
-local userinput = string.upper(userinput)
-if userinput == "Y" then
-    os.reboot()
+    -- cleanup script
+    fs.delete(shell.getRunningProgram())
+
+    print("Press Y to update and reboot (any key to cancel)")
+    local event, userinput = os.pullEvent("char")
+    local userinput = string.upper(userinput)
+    if userinput == "Y" then
+        os.reboot()
+    end
 end
