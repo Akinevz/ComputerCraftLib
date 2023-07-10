@@ -1,36 +1,80 @@
-local module = {}
-
-module.id = "KineCraft OS"
-module.repo = "github:akinevz/ComputerCraftLib"
-module.entry = "update.lua"
-module.build = 4
-
-local function sanitise_repo_name(repo)
-    return repo:gsub(":", "-"):gsub("/", "-")
-end
-
 local libfetch = {}
 
-function libfetch:github(repoString)
-    -- Split repo string into protocol, user and repo
+function libfetch:get(url)
+    -- Download file from URL as string
+    local resp = http.get(url)
+    if not resp then
+        error("url " .. url .. " returned no response")
+    end
+    local text = resp.readAll()
+
+    return text
+end
+
+function libfetch:save(content, dir, filename)
+    -- Create folder if it doesn't exist
+    if not fs.exists(dir) then
+        fs.makeDir(dir)
+    end
+
+    local dest = dir .. "/" .. filename
+
+    -- Open file for writing
+    local file = fs.open(dest, "w")
+
+    -- Write text to file
+    file.write(content)
+
+    -- Close file
+    file.close()
+
+    -- Return output filename
+    return dest
+end
+
+function libfetch:github(repoString, file)
+    -- Split repo string into user and repo
     local user, repo = repoString:match("(.-)/(.+)$")
-    local file = module.entry
     local url = "https://raw.githubusercontent.com/" .. user .. "/" .. repo .. "/master/" .. file
-    return url
+    return self:get(url)
 end
 
 function libfetch:pastebin(pasteId)
     local url = "https://pastebin.com/raw/" .. pasteId
-    return url
+    return self:get(url)
 end
 
-function libfetch:get(url)
-    -- Download file from URL
-    print("Downloading " .. url)
-    local resp = http.get(url)
-    local text = resp.readAll()
+function libfetch:file(repo, file)
+    local protocol, url = repo:match("^(.-):(.-)$")
 
-    return text
+    -- Call correct function based on protocol
+    if protocol == "pastebin" then
+        return libfetch:pastebin(url)
+    elseif protocol == "github" then
+        return libfetch:github(url, file)
+    else
+        error("Invalid protocol in repo string")
+    end
+end
+
+function libfetch:dependencies(dir)
+    local module_path = dir .. "/module.lua"
+    local f = fs.open(module_path, "r")
+    local content = f.readAll()
+    f.close()
+
+    -- Get dependencies from module.lua content
+    local dependencies = {}
+    for line in content:gmatch("[^\r\n]+") do
+        if line:match("^module%.dependencies%s*=%s*%{") then
+            local dep_list = line:match("%{(.+)}%s*$")
+            for dep in dep_list:gmatch("\"(.-)\",?") do
+                table.insert(dependencies, dep)
+            end
+        end
+    end
+
+    return dependencies
 end
 
 local libfresh = {}
@@ -52,127 +96,134 @@ function libfresh:install(content, folder, filename)
     file.close()
 
     -- Return output filename
+    print("Installed " .. dest)
     return dest
 end
 
-function libfresh:get_module_version(file)
-    -- Open file
-    local f = fs.open(file, "r")
+function libfresh:version(content)
 
-    -- Read lines until we find the build line
-    local line = f.readLine()
-    while line do
-        if line:match("^build%s*=%s*(%d+)") then
+end
+
+-- function libfresh:local_version()
+--     -- local versions are installed to /packages
+--     local package_name = self:repo_name()
+--     local versions = {}
+
+--     -- Get list of files in /packages
+--     local files = fs.list(self:install_location())
+
+--     -- Find all files starting with package_name
+--     for _, file in ipairs(files) do
+--         if file:match("^" .. package_name .. "%.(%d+)") then
+--             table.insert(versions, tonumber(file:match("%d+")))
+--         end
+--     end
+
+--     -- Return highest version number
+--     local installed_version
+--     for _, version in ipairs(versions) do
+--         if not installed_version or version > installed_version then
+--             installed_version = version
+--         end
+--     end
+
+--     return installed_version
+-- end
+
+-- function libfresh:fetch_latest(repo, entry)
+--     local content = libfetch:file(repo, entry)
+
+--     local version = self:version(content)
+--     local installed = self:local_version()
+--     if not version > installed then
+--         return installed
+--     end
+
+--     local dest = self:install_location() .. "/" .. module:repo_name() .. "." .. version
+--     self:install(content, dest, entry)
+--     -- Install dependencies
+--     for _, dep in ipairs(module.dependencies) do
+--         local dep_content = libfetch:file(repo, dep)
+--         self:install(dep_content, dest, dep)
+--     end
+
+--     return version
+-- end
+
+local libpkg = {}
+
+libpkg.package_dir = "/packages"
+libpkg.startup_dir = "/startup"
+
+function libpkg:repo_safe(repo)
+    return repo.repo:gsub(":", "-"):gsub("/", "-")
+end
+
+function libpkg:package_dir(module)
+    local dir = self.package_dir .. "/" .. self:repo_safe(module)
+    if not fs.exists(dir) then
+        fs.makeDir(dir)
+    end
+    return dir
+end
+
+function libpkg:bootstrap()
+    self:download("github:akinevz/ComputerCraftLib")
+end
+
+function libpkg:download(repo)
+    local module = libfetch:file(repo, "module.lua")
+    local package = self:package_dir(repo)
+    libfetch:save(module, package, "module.lua")
+    local dependencies = libfetch:dependencies(package)
+    for _, depname in ipairs(dependencies) do
+        local dep = libfetch:file(repo, depname)
+        libfetch:save(dep, package, depname)
+    end
+end
+
+function libpkg:extract_repo(content)
+    -- Get repo from module.repo line
+    local repo
+    for line in content:gmatch("[^\r\n]+") do
+        if line:match("^module%.repo%s*=%s*\"(.+)\"") then
+            repo = line:match("\"(.+)\"")
+            break
+        end
+    end
+    return repo
+end
+
+function libpkg:extract_build(content)
+    -- Get version from module.build line
+    for line in content:gmatch("[^\r\n]+") do
+        if line:match("^module.build%s*=%s*(%d+)") then
             -- Get version number from build line
             local version = tonumber(line:match("%d+"))
-            f.close()
             return version
         end
-        line = f.readLine()
     end
 
     -- If no build line found, return 0
-    f.close()
     return 0
 end
 
-function libfresh:build_repo_url(repo)
-    local protocol, url = repo:match("^(.-):(.-)$")
-
-    -- Call correct function based on protocol
-    if protocol == "pastebin" then
-        return libfetch:pastebin(url)
-    elseif protocol == "github" then
-        return libfetch:github(url)
-    else
-        error("Invalid protocol in repo string")
+function libpkg:install(pkgfile)
+    local f = fs.open(pkgfile, "r")
+    if not f then
+        error("Pkgfile " .. pkgfile .. " does not exist")
     end
+    local content = f.readAll()
+    f.close()
+
+    local repo = self:extract_repo(content)
+    -- Call self:install passing the repo
+    self:download(repo)
 end
 
-function libfresh:fetch_latest(repo)
-    local url = self:build_repo_url(repo)
-    -- todo: download and return the version number
-    local text = libfetch:get(url)
-    local installed_tmp = self:install(text, "/tmp", sanitise_repo_name(repo))
-    local installed_tmp_version = self:get_module_version(installed_tmp)
-
-    return installed_tmp, installed_tmp_version
+if arg[1] == "bootstrap" then
+    libpkg:bootstrap()
+elseif arg[1] == "install" then
+    local package = arg[2]
+    libpkg:install(package)
 end
-
-function libfresh:fetch_local(repo)
-    local package_name = sanitise_repo_name(repo)
-    local versions = {}
-
-    -- Get list of files in /repos
-    local files = fs.list(self:install_location())
-
-    -- Find all files starting with package_name
-    for _, file in ipairs(files) do
-        if file:match("^" .. package_name .. "%.(%d+)") then
-            table.insert(versions, tonumber(file:match("%d+")))
-        end
-    end
-
-    -- Return highest version number
-    local installed_version 
-    for _, version in ipairs(versions) do
-        if not installed_version or version > installed_version then
-            installed_version = version
-        end
-    end
-
-    return package_name, installed_version
-end
-
-function libfresh:register(file, packageName, version)
-    local install_dest = self:install_location() .. "/" .. packageName .. "." .. version
-    if fs.exists(install_dest) then
-        error("Version " .. version .. " of " .. packageName .. " already exists")
-    end
-    fs.makeDir(install_dest)
-    fs.move(file, install_dest .. "/" .. module.entry)
-end
-
-function module:initialise()
-    -- Check entry file exists in startup
-    if not self:autostart_exists() then
-        self:autostart_register()
-    end
-
-    -- Check startup folder exists
-    if not fs.exists("/startup") then
-        -- Install mbs dependency
-        shell.run("wget https://raw.githubusercontent.com/SquidDev-CC/mbs/master/mbs.lua mbs.lua")
-        shell.run("mbs.lua install")
-        os.reboot()
-    end
-
-    -- Run autoupdate routine
-    local tmp, tmp_version = libfresh:fetch_latest(self.repo)
-    local installed, installed_version = libfresh:fetch_local(self.repo)
-
-    debug.debug("tmp", tmp)
-    debug.debug("installed", installed)
-end
-
-function libfresh:startup_entry()
-    return "/startup/" .. module.entry
-end
-
-function libfresh:install_location()
-    return "/repos"
-end
-
-function module:autostart_register()
-    -- Get current program filename
-    local filename = shell.getRunningProgram()
-
-    -- Move current program to startup folder
-    fs.move(filename, libfresh:startup_entry())
-end
-
-function module:autostart_exists()
-    return fs.exists(libfresh:startup_entry())
-end
-
-return module:initialise()
