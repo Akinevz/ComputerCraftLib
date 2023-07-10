@@ -83,18 +83,17 @@ libpkg.package_dir = "/packages"
 libpkg.startup_dir = "/startup"
 libpkg.root_repo = "github:akinevz/ComputerCraftLib"
 
-function libpkg:delete_installer()
+function libpkg:cleanup()
     local source = "/update.lua"
     local dest = "/startup/update.lua"
+    local bootstrap = "/bootstrap.lua"
     if fs.exists(source) then
         fs.delete(dest)
         fs.move(source, dest)
     end
-end
-
-function libpkg:clean()
-    fs.delete(self.package_dir)
-    fs.delete(self.startup_dir)
+    if fs.exists(bootstrap) then
+        fs.delete(bootstrap)
+    end
 end
 
 function libpkg:fs_safe(repo)
@@ -110,10 +109,8 @@ function libpkg:make_pkg(module)
 end
 
 function libpkg:bootstrap()
-    local repo = self.root_repo
-
-    self:download(repo)
-    self:postinstall(repo)
+    term.clear()
+    print("installed")
 end
 
 function libpkg:download(repo)
@@ -200,7 +197,7 @@ end
 function libpkg:startup()
     local ownPath = shell.getRunningProgram()
     if ownPath == "/startup/update.lua" then
-        self:delete_installer()
+        self:cleanup()
     else 
         self:bootstrap()
     end
@@ -215,9 +212,6 @@ elseif arg[1] == "install" then
     else
         libpkg:install("module.lua")
     end
-elseif arg[1] == "clean" then
-    libpkg:clean()
-    print("clean")
 elseif not arg[1] then
     libpkg:startup()
     print("autoupdating")

@@ -28,9 +28,6 @@ if not arg[1] then
         wget("/update.lua", bootstrap, "/update.lua bootstrap")
     end
 
-    -- cleanup script
-    fs.delete(shell.getRunningProgram())
-
     print("Press Y to update and reboot (any key to cancel)")
     local event, userinput = os.pullEvent("char")
     local userinput = string.upper(userinput)
