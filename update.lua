@@ -150,15 +150,17 @@ function libpkg:install(pkgfile)
 end
 
 function libpkg:postinstall(repo)
-    local module = libfetch:file(repo, "module.lua")
+    -- fetch a fresh module.lua
     local package = self:make_pkg(repo)
-
+    local module = package .. "/module.lua"
+    local f = fs.open(module, "r")
+    local content = f.readAll()
     -- Check if module.startup is true
-    for line in module:gmatch("[^\r\n]+") do
+    for line in content:gmatch("[^\r\n]+") do
         if line:match("^module%.startup%s*=%s*true") then
             -- Get entry file from module.entry line
             local entry
-            for line in module:gmatch("[^\r\n]+") do
+            for line in content:gmatch("[^\r\n]+") do
                 if line:match("^module%.entry%s*=%s*\"(.+)\"") then
                     entry = line:match("\"(.+)\"")
                     break
