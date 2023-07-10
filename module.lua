@@ -5,6 +5,6 @@ module.repo = "github:akinevz/ComputerCraftLib"
 module.build = 12
 module.startup = true
 module.entry = "update.lua"
-module.dependencies = { "bootstrap.lua", "package.lua" }
+module.dependencies = { "update.lua", "bootstrap.lua", "package.lua" }
 
 return module

@@ -146,11 +146,41 @@ function libpkg:install(pkgfile)
     local repo = self:extract_repo(content)
     -- Call self:install passing the repo
     self:download(repo)
+    self:postinstall(repo)
+end
+
+function libpkg:postinstall(repo)
+    local module = libfetch:file(repo, "module.lua")
+    local package = self:make_pkg(repo)
+
+    -- Check if module.startup is true
+    for line in module:gmatch("[^\r\n]+") do
+        if line:match("^module%.startup%s*=%s*true") then
+            -- Get entry file from module.entry line
+            local entry
+            for line in module:gmatch("[^\r\n]+") do
+                if line:match("^module%.entry%s*=%s*\"(.+)\"") then
+                    entry = line:match("\"(.+)\"")
+                    break
+                end
+            end
+
+            -- Copy entry file to startup dir
+            local src = package .. "/" .. entry
+            local dest = self.startup_dir .. "/" .. entry
+            fs.copy(src, dest)
+            break
+        end
+    end
 end
 
 if arg[1] == "bootstrap" then
     libpkg:bootstrap()
 elseif arg[1] == "install" then
     local package = arg[2]
-    libpkg:install(package)
+    if package then
+        libpkg:install(package)
+    else
+        libpkg:install("module.lua")
+    end
 end
