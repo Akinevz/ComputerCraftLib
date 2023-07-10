@@ -159,7 +159,7 @@ function libpkg:repo_safe(repo)
     return repo:gsub(":", "-"):gsub("/", "-")
 end
 
-function libpkg:package_dir(module)
+function libpkg:make_pkg(module)
     local dir = self.package_dir .. "/" .. self:repo_safe(module)
     if not fs.exists(dir) then
         fs.makeDir(dir)
@@ -173,7 +173,7 @@ end
 
 function libpkg:download(repo)
     local module = libfetch:file(repo, "module.lua")
-    local package = self:package_dir(repo)
+    local package = self:make_pkg(repo)
     libfetch:save(module, package, "module.lua")
     local dependencies = libfetch:dependencies(package)
     for _, depname in ipairs(dependencies) do
