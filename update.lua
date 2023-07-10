@@ -156,7 +156,7 @@ libpkg.package_dir = "/packages"
 libpkg.startup_dir = "/startup"
 
 function libpkg:repo_safe(repo)
-    return repo.repo:gsub(":", "-"):gsub("/", "-")
+    return repo:gsub(":", "-"):gsub("/", "-")
 end
 
 function libpkg:package_dir(module)
