@@ -18,7 +18,7 @@ end
 
 if not dependency("/update.lua") then
     local bootstrap = "https://raw.githubusercontent.com/akinevz/ComputerCraftLib/master/update.lua"
-    wget("/update.lua", bootstrap, "/update.lua install")
+    wget("/update.lua", bootstrap, "/update.lua bootstrap")
 end
 
 print("Press Y to update and reboot (any key to cancel)")

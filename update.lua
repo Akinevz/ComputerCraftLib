@@ -81,13 +81,19 @@ local libpkg = {}
 
 libpkg.package_dir = "/packages"
 libpkg.startup_dir = "/startup"
+libpkg.root_repo = "github:akinevz/ComputerCraftLib"
 
-function libpkg:repo_safe(repo)
+function libpkg:clean()
+    fs.delete(self.package_dir)
+    fs.delete(self.startup_dir)
+end
+
+function libpkg:fs_safe(repo)
     return repo:gsub(":", "-"):gsub("/", "-")
 end
 
 function libpkg:make_pkg(module)
-    local dir = self.package_dir .. "/" .. self:repo_safe(module)
+    local dir = self.package_dir .. "/" .. self:fs_safe(module)
     if not fs.exists(dir) then
         fs.makeDir(dir)
     end
@@ -95,7 +101,7 @@ function libpkg:make_pkg(module)
 end
 
 function libpkg:bootstrap()
-    local repo = "github:akinevz/ComputerCraftLib"
+    local repo = self.root_repo
     self:download(repo)
     self:postinstall(repo)
 end
@@ -190,5 +196,7 @@ elseif arg[1] == "install" then
     else
         libpkg:install("module.lua")
     end
+elseif arg[1] == "clean" then
+    libpkg:clean()
 end
 print("checking for updates")
