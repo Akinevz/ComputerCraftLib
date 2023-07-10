@@ -198,7 +198,7 @@ function libpkg:postinstall(repo)
 end
 
 function libpkg:startup()
-    local ownPath = shell.getCurrentProgram()
+    local ownPath = shell.getRunningProgram()
     if ownPath == "/startup/update.lua" then
         self:delete_installer()
     else 
