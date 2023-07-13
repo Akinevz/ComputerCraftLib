@@ -2,6 +2,8 @@ local mining = {
     mined_blocks = 0
 }
 
+local recovery = require("recovery")
+
 function mining:forward()
     local success, reason = turtle.dig()
     if success then

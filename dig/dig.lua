@@ -2,6 +2,13 @@
 
 local scheduler = require("scheduler")
 
+scheduler:register("program:arguments", {
+    cb = function()
+        printError("program is missing arguments")
+        scheduler:clear()
+    end
+})
+
 local movement = require("movement")
 
 local inventory = require("inventory")
@@ -57,14 +64,18 @@ scheduler:register("program:minimise:y", {
 
 scheduler:register("program:excavate", {
     cb = function()
-        local depth = scheduler:argument("depth")
+        if not scheduler:arguments({"depth", "direction", "diameter"}) then
+            scheduler:insert("program:arguments")
+            return
+        end
+        local depth = scheduler:argument_number("depth")
         local gps_depth = movement.gps:depth()
-        if gps_depth < depth then
+        if gps_depth < tonumber(depth) then
             program:schedule_layer()
             scheduler:postpone("program:excavate")
             return
         end
-        program:goto_origin()
+        scheduler:postpone("program:goto_origin")
     end
 })
 
@@ -89,7 +100,7 @@ scheduler:register("program:layer:end", {
 
 scheduler:register("program:layer", {
     cb = function()
-        local diameter = scheduler:argument("diameter")
+        local diameter = scheduler:argument_number("diameter")
         local direction = scheduler:argument("direction")
         -- for each col
         for i = 1, diameter - 1 do
@@ -187,30 +198,18 @@ scheduler:register("recovery:down", {
 scheduler:register("move:forward", {
     cb = function()
         local moved, reason = movement:forward()
-        if not moved then
-            printError(reason .. " attempting recovery")
-            scheduler:insert("recovery:forward")
-        end
     end
 })
 
 scheduler:register("move:up", {
     cb = function()
         local moved, reason = movement:up()
-        if not moved then
-            printError(reason .. " attempting recovery")
-            scheduler:insert("recovery:up")
-        end
     end
 })
 
 scheduler:register("move:down", {
     cb = function()
         local moved, reason = movement:down()
-        if not moved then
-            printError(reason .. " attempting recovery")
-            scheduler:insert("recovery:down")
-        end
     end
 })
 
@@ -262,48 +261,49 @@ scheduler:register("dig:down", {
     end
 })
 
--- prelude
 
-local function dump(o)
-    if type(o) == 'table' then
-        local s = '{ '
-        for k, v in pairs(o) do
-            if type(k) ~= 'number' then k = '"' .. k .. '"' end
-            s = s .. '[' .. k .. '] = ' .. dump(v) .. ','
-        end
-        return s .. '} '
-    else
-        return tostring(o)
-    end
-end
 
 -- arguments
 
-local diameter = tonumber(arg[1])
-local direction = arg[2] or "right"
-local depth = (arg[3])
+-- local diameter = tonumber(arg[1])
+-- local direction = arg[2] or "right"
+-- local depth = (arg[3])
 
-if not diameter then
-    printError("please specify diameter of the dig")
-    return
-end
+-- if not diameter then
+--     printError("please specify diameter of the dig")
+--     return
+-- end
 
-if not (direction == "right" or direction == "left") then
-    printError("please specify direction (right|left)")
-    return
-end
+-- if not (direction == "right" or direction == "left") then
+--     printError("please specify direction (right|left)")
+--     return
+-- end
 
-if not tonumber(depth) and not depth == "max" then
-    printError("please specify depth number or max")
-    return
-end
+-- if not tonumber(depth) and not depth == "max" then
+--     printError("please specify depth number or max")
+--     return
+-- end
 
-local max_depth = tonumber(depth) or math.huge
+-- local max_depth = tonumber(depth) or math.huge
 
-local function execute()
+local function run_excavate()
     scheduler:arguments({ diameter = diameter, direction = direction, depth = max_depth })
     scheduler:postpone("program:excavate")
     scheduler:execute()
 end
 
-execute()
+local function run_repl()
+    local running = true
+    while running do
+        local line = read()
+        if line:match("^%a+=%S+") then
+            local arg, val = line:match("^(%a+)=(.+)$")
+            scheduler:argument(arg, val)
+        else
+            running = scheduler:run(line) and running
+        end
+    end
+end
+
+-- run_excavate()
+run_repl()
