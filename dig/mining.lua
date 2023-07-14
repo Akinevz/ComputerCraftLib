@@ -1,35 +1,36 @@
 local mining = {
-    mined_blocks = 0
+    troubleshoot = {}
 }
 
-local recovery = require("recovery")
+function mining:set_dependencies()
+    return function(troubleshoot)
+        self.troubleshoot = troubleshoot
+        return mining
+    end
+end
 
 function mining:forward()
     local success, reason = turtle.dig()
-    if success then
-        mining.mined_blocks = mining.mined_blocks + 1
+    if not success then
+        self.troubleshoot:dig("forward", reason)
     end
     return success, reason
 end
 
 function mining:up()
     local success, reason = turtle.digUp()
-    if success then
-        mining.mined_blocks = mining.mined_blocks + 1
+    if not success then
+        self.troubleshoot:dig("up", reason)
     end
     return success, reason
 end
 
 function mining:down()
     local success, reason = turtle.digDown()
-    if success then
-        mining.mined_blocks = mining.mined_blocks + 1
+    if not success then
+        self.troubleshoot:dig("down", reason)
     end
     return success, reason
 end
 
-function mining:mined()
-    return mining.mined_blocks
-end
-
-return mining
+return mining:set_dependencies()

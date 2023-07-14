@@ -1,3 +1,4 @@
+-- todo: use serialisation to store 3 bits per move
 local gps = {
     angle = 0,
     last_turn = "right",
@@ -10,33 +11,43 @@ local gps = {
     }
 }
 
-local dig = require("mining")
 
 local move = {
-    gps = gps
+    gps = gps,
+    problem = {}
 }
+
+function move:set_dependencies()
+    return function(problem)
+        self.problem = problem
+        return move
+    end
+end
 
 function move:forward()
     local moved, reason = turtle.forward()
-    if moved then
-        gps:forward()
+    if not moved then
+        return self.problem:move("forward", reason)
     end
+    gps:forward()
     return moved, reason
 end
 
 function move:up()
     local moved, reason = turtle.up()
-    if moved then
-        gps:up()
+    if not moved then
+        return self.problem:move("up", reason)
     end
+    gps:up()
     return moved, reason
 end
 
 function move:down()
     local moved, reason = turtle.down()
-    if moved then
-        gps:down()
+    if not moved then
+        return self.problem:move("down", reason)
     end
+    gps:down()
     return moved, reason
 end
 
@@ -159,4 +170,4 @@ function gps:save()
     self.saved.angle = self.angle
 end
 
-return move, dig, detect, gps
+return move:set_dependencies()

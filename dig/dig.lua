@@ -1,107 +1,182 @@
+function dump(o)
+    if type(o) == 'table' then
+        local s = '{ '
+        for k, v in pairs(o) do
+            if type(k) ~= 'number' then k = '"' .. k .. '"' end
+            s = s .. '[' .. k .. '] = ' .. dump(v) .. ','
+        end
+        return s .. '} '
+    else
+        return tostring(o)
+    end
+end
+
 -- declarations
 
-local scheduler = require("scheduler")
+local program = require("program")
 
-scheduler:register("program:arguments", {
-    cb = function()
-        printError("program is missing arguments")
-        scheduler:clear()
-    end
-})
-
-local movement = require("movement")
+local problem = require("problem")(program)
 
 local inventory = require("inventory")
 
-local mining = require("mining")
+local movement = require("movement")(problem)
 
-local program = {
-    fuel_distance = 0
-}
+local mining = require("mining")(problem)
 
-function program:schedule_layer()
-    scheduler:postpone("program:layer:begin")
-    scheduler:postpone("program:layer")
-    scheduler:postpone("program:layer:end")
-end
+-- problem
 
-function program:goto_origin()
-    scheduler:postpone("gps:save")
-    scheduler:postpone("program:minimise:depth")
-    scheduler:postpone("program:minimise:x")
-    scheduler:postpone("move:turn")
-    scheduler:postpone("program:minimise:y")
-end
-
-scheduler:register("program:minimise:depth", {
+program:register("problem:arguments", {
     cb = function()
-        if movement.gps:depth() > 0 then
-            print("depth " .. movement.gps:depth())
-            scheduler:insert({ "move:up", "program:minimise:depth" })
-        end
+        printError("program is missing arguments")
+        program:schedule_now("terminate")
     end
 })
 
-scheduler:register("program:minimise:x", {
+-- todo: make generator
+program:register("problem:space", {
     cb = function()
-        if movement.gps:x() > 0 then
-            scheduler:insert({ "move:forward", "program:minimise:x" })
-        end
+        program:run_now({ "goto:origin", "inventory:scan", "inventory:dump", "goto:restore" })
     end
 })
 
-scheduler:register("program:minimise:y", {
+program:register("problem:chest", {
     cb = function()
-        if movement.gps:y() > 0 then
-            scheduler:insert({ "move:forward", "program:minimise:y" })
-        end
+        printError("no chest detected")
+        program:schedule_now({ "turn", "turn", "terminate" })
     end
 })
 
--- function program:goto_saved()
-
--- end
-
-scheduler:register("program:excavate", {
+program:register("problem:fuel:empty", {
     cb = function()
-        if not scheduler:arguments({"depth", "direction", "diameter"}) then
-            scheduler:insert("program:arguments")
+        printError("please place fuel into the inventory")
+        os.pullEvent("turtle_inventory")
+        program:run_now("inventory:scan")
+        program:run_now("inventory:refuel")
+    end
+})
+
+program:register("problem:fuel:low", {
+    cb = function()
+        program:run_now("inventory:scan")
+        local no_fuel = #inventory.fuel_slots == 0
+        if no_fuel then
+            program:run_now("problem:fuel:empty")
             return
         end
-        local depth = scheduler:argument_number("depth")
+        program:schedule_now("inventory:refuel")
+    end
+})
+
+program:register("problem:obstructed", {
+    cb = function()
+        local direction = program:argument("direction")
+        if direction == "up" then
+            if mining:up() then
+                movement:up()
+            end
+            return
+        end
+        if direction == "down" then
+            if mining:down() then
+                movement:down()
+            end
+            return
+        end
+        if direction == "forward" then
+            if mining:forward() then
+                movement:forward()
+            end
+            return
+        end
+    end
+})
+
+program:register("problem:tool", {
+    cb = function()
+        print("please equip a valid tool with equip:right or equip:left")
+        program:schedule_now("terminate")
+    end
+})
+
+program:register("problem:unbreakable", {
+    cb = function()
+        local direction = program:argument("direction")
+        if direction == "up" then
+            printError("irrecoverable position: bedrock above turtle")
+            program:schedule("terminate")
+            return
+        end
+        if direction == "down" then
+            printError("warning: bedrock below turtle")
+            program:schedule("goto:origin")
+            return
+        end
+        if direction == "forward" then
+            printError("warning: bedrock in front of turtle")
+            program:schedule("goto:origin")
+            return
+        end
+    end
+})
+
+-- program
+
+program:register("program:return", {
+    cb = function()
+        program:argument("distance", movement.gps:to_origin())
+        program:schedule("inventory:scan")
+        program:schedule("inventory:refuel")
+        program:schedule("goto:origin")
+        program:schedule("inventory:dump")
+    end
+})
+
+program:register("program:excavate", {
+    cb = function()
+        if not program:arguments({ "depth", "direction", "diameter" }) then
+            program:schedule_now("problem:arguments")
+            return
+        end
+        local depth = program:argument_number("depth")
+        local diameter = program:argument_number("diameter")
         local gps_depth = movement.gps:depth()
-        if gps_depth < tonumber(depth) then
-            program:schedule_layer()
-            scheduler:postpone("program:excavate")
+
+        program:argument_number("distance", diameter * diameter * depth)
+
+        if gps_depth < depth then
+            program:schedule("program:layer:begin")
+            program:schedule("program:layer")
+            program:schedule("program:layer:end")
+            program:schedule("program:excavate")
             return
         end
-        scheduler:postpone("program:goto_origin")
+        program:schedule("program:return")
     end
 })
 
-scheduler:register("program:layer:begin", {
+program:register("program:layer:begin", {
     cb = function()
         mining:down()
         movement:down()
     end
 })
 
-scheduler:register("program:layer:end", {
+program:register("program:layer:end", {
     cb = function()
         movement:turn()
-        local direction = scheduler:argument("direction")
+        local direction = program:argument("direction")
         if direction == "right" then
-            scheduler:argument("direction", "left")
+            program:argument("direction", "left")
         elseif direction == "left" then
-            scheduler:argument("direction", "right")
+            program:argument("direction", "right")
         end
     end
 })
 
-scheduler:register("program:layer", {
+program:register("program:layer", {
     cb = function()
-        local diameter = scheduler:argument_number("diameter")
-        local direction = scheduler:argument("direction")
+        local diameter = program:argument_number("diameter")
+        local direction = program:argument("direction")
         -- for each col
         for i = 1, diameter - 1 do
             for j = 1, diameter - 1 do
@@ -125,143 +200,213 @@ scheduler:register("program:layer", {
     end
 })
 
--- scheduler:register("program:goto_origin", {
---     cb = function()
---         program:goto_origin()
---     end
--- })
+local function goto_origin()
+    program:schedule_now({ "gps:save", "program:minimise:depth", "program:minimise:x", "program:minimise:y" })
+end
 
-
--- scheduler:register("program:goto_saved", {
---     cb = function()
---         program:goto_saved()
---     end
--- })
-
--- scheduler:register("inventory:empty_loot", {
---     cb = function()
---         inventory:empty_loot()
---     end
--- })
-
-scheduler:register("inventory:fuel", {
+program:register("goto:origin", {
     cb = function()
-        program.fuel_distance = inventory:total_fuel()
+        goto_origin()
     end
 })
 
-scheduler:register("recovery:forward", {
+-- todo: reset alignment
+
+program:register("program:minimise:depth", {
     cb = function()
-        local mined, reason = mining:forward()
-        if not mined then
-            printError(reason)
-            scheduler:insert("halt")
+        if movement.gps:depth() > 0 then
+            print("depth " .. movement.gps:depth())
+            program:schedule_now({ "move:up", "program:minimise:depth" })
         end
+    end
+})
+
+program:register("program:minimise:x", {
+    cb = function()
+        if movement.gps:x() > 0 then
+            program:schedule_now({ "move:forward", "program:minimise:x" })
+        end
+    end
+})
+
+program:register("program:minimise:y", {
+    cb = function()
+        if movement.gps:y() > 0 then
+            program:schedule_now({ "move:forward", "program:minimise:y" })
+        end
+    end
+})
+
+-- todo: restore alignment
+local function goto_restore()
+    program:schedule("program:restore:angle")
+    program:schedule("program:restore:depth")
+    program:schedule("program:restore:x")
+    program:schedule("program:restore:y")
+end
+
+program:register("goto:restore", {
+    cb = function()
+        goto_restore()
+    end
+})
+
+program:register("program:restore:depth", {
+    cb = function()
+        if movement.gps:depth() > 0 then
+            print("depth " .. movement.gps:depth())
+            program:schedule_now({ "move:up", "program:minimise:depth" })
+        end
+    end
+})
+
+program:register("program:restore:x", {
+    cb = function()
+        if movement.gps:x() > 0 then
+            program:schedule_now({ "move:forward", "program:minimise:x" })
+        end
+    end
+})
+
+program:register("program:restore:y", {
+    cb = function()
+        if movement.gps:y() > 0 then
+            program:schedule_now({ "move:forward", "program:minimise:y" })
+        end
+    end
+})
+
+program:register("program:restore:angle", {
+    cb = function()
+        printError("unimplemented program:restore:angle")
+        program:schedule_now("halt")
+    end
+})
+
+-- move
+
+program:register("move:forward", {
+    cb = function()
         local moved, reason = movement:forward()
-        if not moved then
-            printError(reason)
-            scheduler:insert("halt")
-        end
     end
 })
 
-scheduler:register("recovery:up", {
-    cb = function()
-        local mined, reason = mining:up()
-        if not mined then
-            printError(reason)
-            scheduler:insert("halt")
-        end
-        local moved, reason = movement:up()
-        if not moved then
-            printError(reason)
-            scheduler:insert("halt")
-        end
-    end
-})
-
-scheduler:register("recovery:down", {
-    cb = function()
-        local mined, reason = mining:down()
-        if not mined then
-            printError(reason)
-            scheduler:insert("halt")
-        end
-        local moved, reason = movement:down()
-        if not moved then
-            printError(reason)
-            scheduler:insert("halt")
-        end
-    end
-})
-
-scheduler:register("move:forward", {
-    cb = function()
-        local moved, reason = movement:forward()
-    end
-})
-
-scheduler:register("move:up", {
+program:register("move:up", {
     cb = function()
         local moved, reason = movement:up()
     end
 })
 
-scheduler:register("move:down", {
+program:register("move:down", {
     cb = function()
         local moved, reason = movement:down()
     end
 })
 
-scheduler:register("move:right", {
+program:register("move:right", {
     cb = function()
         movement:right()
     end
 })
 
-scheduler:register("move:left", {
+program:register("move:left", {
     cb = function()
         movement:left()
     end
 })
 
-scheduler:register("move:turn", {
+program:register("move:turn", {
     cb = function()
         movement:turn()
     end
 })
 
-scheduler:register("move:counterturn", {
+program:register("move:counterturn", {
     cb = function()
         movement:opposite()
     end
 })
 
-scheduler:register("gps:save", {
+-- gps
+
+program:register("gps:save", {
     cb = function()
         movement.gps:save()
     end
 })
 
-scheduler:register("dig:forward", {
+-- dig
+
+program:register("dig:forward", {
     cb = function()
         mining:forward()
     end
 })
 
-scheduler:register("dig:up", {
+program:register("dig:up", {
     cb = function()
         mining:up()
     end
 })
 
-scheduler:register("dig:down", {
+program:register("dig:down", {
     cb = function()
         mining:down()
     end
 })
 
+-- inventory
 
+program:register("inventory:scan", {
+    cb = function()
+        inventory:scan()
+    end
+})
+
+program:register("inventory:dump", {
+    cb = function()
+        local has, block = turtle.detect()
+        if has and block.name:find("chest") then
+            inventory:dump()
+            program:schedule("turn")
+            program:schedule("turn")
+        else
+            program:schedule_now("problem:chest")
+        end
+    end
+})
+
+program:register("inventory:refuel", {
+    cb = function()
+        local distance = program:argument("distance") or 1
+        print("trying to refuel for distance: " .. distance)
+        local full_refuel = inventory:refuel(distance)
+        if not full_refuel then
+            program:schedule("problem:fuel:low")
+        end
+    end
+})
+
+program:register("print:fuel", {
+    cb = function()
+        local fuel = turtle.getFuelLevel()
+        print("Fuel level: " .. fuel)
+    end
+})
+
+-- equip
+
+program:register("equip:left", {
+    cb = function()
+        turtle.equipLeft()
+    end
+})
+
+program:register("equip:right", {
+    cb = function()
+        turtle.equipRight()
+    end
+})
 
 -- arguments
 
@@ -287,9 +432,9 @@ scheduler:register("dig:down", {
 -- local max_depth = tonumber(depth) or math.huge
 
 local function run_excavate()
-    scheduler:arguments({ diameter = diameter, direction = direction, depth = max_depth })
-    scheduler:postpone("program:excavate")
-    scheduler:execute()
+    program:arguments({ diameter = diameter, direction = direction, depth = max_depth })
+    program:schedule("program:excavate")
+    program:execute()
 end
 
 local function run_repl()
@@ -298,9 +443,9 @@ local function run_repl()
         local line = read()
         if line:match("^%a+=%S+") then
             local arg, val = line:match("^(%a+)=(.+)$")
-            scheduler:argument(arg, val)
+            program:argument(arg, val)
         else
-            running = scheduler:run(line) and running
+            running = program:run_now(line) and running
         end
     end
 end
